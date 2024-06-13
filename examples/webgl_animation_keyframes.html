@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>three.js webgl - animation - keyframes</title>
+		<meta charset="utf-8" />
+		<meta
+			name="viewport"
+			content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0"
+		/>
+		<link type="text/css" rel="stylesheet" href="main.css" />
+		<style>
+			body {
+				background-color: #bfe3dd;
+				color: #000;
+			}
+
+			a {
+				color: #2983ff;
+			}
+		</style>
+	</head>
+
+	<body>
+		<!-- 容器 -->
+		<div id="container"></div>
+
+		<!-- 作者信息 -->
+		<div id="info">
+			<a href="https://threejs.org" target="_blank" rel="noopener">three.js</a
+			>关键帧动画<br />
+			Model:
+			<a
+				href="https://artstation.com/artwork/1AGwX"
+				target="_blank"
+				rel="noopener"
+				>Littlest Tokyo</a
+			>
+			by
+			<a href="https://artstation.com/glenatron" target="_blank" rel="noopener"
+				>Glen Fox</a
+			>, CC Attribution.
+		</div>
+
+		<!-- 这段代码是一个importmap，它是一种在Web开发中用于JavaScript模块导入的机制。importmap定义了一个映射关系，允许开发者在浏览器中使用模块路径而不是完整的URL来导入模块。
+		具体来说，这个importmap的JSON结构包含以下信息：
+		three: 指向了一个特定的模块文件路径（在这里是相对路径），这个模块通常是Three.js库的主文件。Three.js是一个用于在浏览器中创建和显示3D图形的JavaScript库。
+		"three/addons/": 这是一个路径前缀，指向了Three.js库的附加模块（addons）的目录。
+		以下是代码中每个部分的含义：
+		"imports": 这是一个对象，包含了所有导入映射。
+		"three": 是一个键，对应的值 "../build/three.module.js" 指定了Three.js主模块文件的路径。
+		"three/addons/": 另一个键，它的值 "./jsm/" 指定了Three.js附加模块（如额外的效果、控制器等）的目录位置。
+		使用这个importmap，你可以在你的JavaScript代码中如下导入模块 -->
+
+		<script type="importmap">
+			{
+				"imports": {
+					"three": "../build/three.module.js",
+					"three/addons/": "./jsm/"
+				}
+			}
+		</script>
+
+		<script type="module">
+			import * as THREE from "three";
+
+			// 监控Three.js的性能
+			import Stats from "three/addons/libs/stats.module.js";
+
+			import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+			import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
+
+			import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+			import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+
+			let mixer;
+
+			// 保持动画的平滑和一致性
+			const clock = new THREE.Clock();
+
+			// 获取容器
+			const container = document.getElementById("container");
+
+			// 将性能监控容器显示在左上角
+			const stats = new Stats();
+			container.appendChild(stats.dom);
+
+			// antialias抗锯齿
+			// WebGLRenderer三维模型渲染器
+			const renderer = new THREE.WebGLRenderer({ antialias: true });
+
+			// window.devicePixelRatio返回当前显示设备的物理像素和CSS像素的比值
+			// 你可以在windows/屏幕/显示中查看
+			// 渲染的图像在不同的显示设备上看起来清晰是很重要的。
+			// 在高分辨率屏幕上，图像看起来会更加清晰，因为渲染器会生成更多的物理像素来匹配屏幕的高密度。
+			// 在低分辨率屏幕上，不会因为不必要的分辨率提升而浪费性能。
+			renderer.setPixelRatio(window.devicePixelRatio);
+
+			// 渲染器的画布尺寸
+			// 全屏显示
+			renderer.setSize(window.innerWidth, window.innerHeight);
+
+			// 添加渲染器到元素上
+			// 实际上就是添加一个canvas元素
+			container.appendChild(renderer.domElement);
+
+			// 环境地图
+			// 生成高质量环境映射的工具，这些映射可以用于模拟周围环境对物体表面的影响
+			const pmremGenerator = new THREE.PMREMGenerator(renderer);
+
+			// 在Three.js中，Scene对象是所有3D物体的容器，包括光源、摄像机、几何体等。
+			const scene = new THREE.Scene();
+
+			// 这里设置场景的背景色。使用THREE.Color构造函数创建了一个新的颜色对象，并将这个颜色赋值给场景的background属性。颜色值0xbfe3dd是一个十六进制颜色，代表一种淡蓝色
+			scene.background = new THREE.Color(0xbfe3dd);
+
+			// 它创建了一个环境场景，通常用于生成环境映射。这个环境场景包含了一些默认的光源和几何体，以模拟现实世界中的环境光照效果。
+			scene.environment = pmremGenerator.fromScene(
+				new RoomEnvironment(renderer),
+				0.04
+			).texture;
+
+			// 40:相机视野角度
+			//  window.innerWidth / window.innerHeight :这个比例因子根据浏览器窗口的尺寸决定了视锥体的长宽比。确保无论窗口大小如何，渲染的3D场景都保持正确的宽高比。
+			// 于大多数浏览器窗口的宽度和高度不是相等的，将其设置为 1/1 宽高比会导致渲染的图像在屏幕上水平或垂直方向上被压缩或拉伸。如果你的渲染窗口实际上是一个正方形，那么图像将正常显示，否则它看起来会变形。
+			// 1：是近剪裁面（near clipping plane）的值，表示相机能够渲染的最近距离。
+			// 100：是远剪裁面（far clipping plane）的值，表示相机能够渲染的最远距离。
+			const camera = new THREE.PerspectiveCamera(
+				40,
+				window.innerWidth / window.innerHeight,
+				1,
+				100
+			);
+			camera.position.set(4, 4, 8);
+
+			// 是一个用于控制相机在3D场景中围绕目标旋转的辅助类
+			const controls = new OrbitControls(camera, renderer.domElement);
+			controls.target.set(0, 0.5, 0);
+			controls.update();
+
+			// 这行代码禁用了平移（平移是指能够通过拖动来移动相机位置）。默认情况下，OrbitControls允许用户平移相机，但这里设置为false来关闭这个功能。
+			controls.enablePan = false;
+
+			// 启用阻尼（damping）效果。这意味着当用户停止旋转或缩放相机时，相机运动会逐渐平滑下来，而不是立即停止，从而产生更自然、更流畅的用户体验。
+			controls.enableDamping = true;
+
+			// 这是Three.js中用于加载DRACO压缩的3D模型的一个加载器类。DRACO是一个由Google开发的开源压缩库，能够高效地压缩和解压3D网格和点云数据。
+			// 如果模型文件中包含 DRACO 压缩的数据,而你没有使用 setDRACOLoader 来配置 GLTFLoader，那么在尝试加载模型时，GLTFLoader 将无法正确解析这些压缩的数据。
+			const dracoLoader = new DRACOLoader();
+			dracoLoader.setDecoderPath("jsm/libs/draco/gltf/");
+
+			// 用于加载.glb或.gltf格式的3D模型
+			const loader = new GLTFLoader();
+
+			// 这行代码将DRACO加载器设置为GLTF加载器的依赖，以便能够处理压缩过的模型数据
+			loader.setDRACOLoader(dracoLoader);
+
+			// 第一个参数是一个回调函数，一旦模型加载完成，它将被调用。这个函数接收加载的gltf对象作为参数。
+			// 在这个回调中，它执行以下操作：
+			loader.load(
+				"models/gltf/LittlestTokyo.glb",
+				function (gltf) {
+					// 从gltf.scene获取加载的3D模型对象
+					const model = gltf.scene;
+
+					// 这意味着模型将在三维空间中(1, 1, 0)的位置
+					model.position.set(1, 1, 0);
+
+					// 这里将模型缩小到原来的1%。
+					model.scale.set(0.01, 0.01, 0.01);
+
+					// 将模型添加到场景中
+					scene.add(model);
+
+					// 创建了一个新的动画混合器，它关联到加载的模型。
+					mixer = new THREE.AnimationMixer(model);
+
+					// 获取模型的第一个动画剪辑，并开始播放。
+					// 小车在跑
+					mixer.clipAction(gltf.animations[0]).play();
+
+					// 这行代码设置了一个动画循环，animate是一个需要自己定义的函数，它将在每一帧被调用以更新场景和动画
+					renderer.setAnimationLoop(animate);
+				},
+				undefined,
+				function (e) {
+					console.error(e);
+				}
+			);
+
+			window.onresize = function () {
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize(window.innerWidth, window.innerHeight);
+			};
+
+			function animate() {
+				// 获取自上次调用getDelta以来的 时间差
+				const delta = clock.getDelta();
+
+				mixer.update(delta);
+
+				controls.update();
+
+				stats.update();
+
+				renderer.render(scene, camera);
+			}
+		</script>
+	</body>
+</html>
